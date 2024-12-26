@@ -1,6 +1,6 @@
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::{net::{Ipv4Addr, Ipv6Addr}, str::FromStr};
 
-use axum::{extract::Query, http::{header, StatusCode}, response::IntoResponse, routing::get, Router};
+use axum::{extract::Query, http::{header, StatusCode}, response::IntoResponse, routing::{get, post}, Router};
 
 async fn hello_bird() -> &'static str {
     "Hello, bird!"
@@ -83,14 +83,78 @@ async fn key_v6(req: Query<KeyV6Req>) -> impl IntoResponse {
     key.to_string()
 }
 
+async fn manifest(body: String) -> Result<(StatusCode, String), (StatusCode, &'static str)> {
+    // let mut orders: Vec<order::Order> = Vec::new();
+
+    // parse cargo manifest, return error if failed
+    let manifest = cargo_manifest::Manifest::from_str(body.as_str()).map_err(|_| (
+            StatusCode::BAD_REQUEST,
+            "Invalid manifest",
+        ))?;
+    
+    let package = manifest.package.ok_or((
+            StatusCode::BAD_REQUEST,
+            "Invalid manifest",
+        ))?;
+
+    if !package.keywords
+        .and_then(|x| x.as_local())
+        .ok_or((
+            StatusCode::BAD_REQUEST,
+            "Magic keyword not provided",
+        ))?
+        .contains(&String::from("Christmas 2024")) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "Magic keyword not provided",
+            ));
+    };
+    
+    let orders: Vec<(&str, u32)> = package.metadata
+        .as_ref()
+        .and_then(|x| x.get("orders"))
+        .and_then(|x| x.as_array())
+        .ok_or((
+            StatusCode::NO_CONTENT,
+            "",
+        ))?
+        .iter()
+        .filter_map(|x| x.as_table())
+        .filter_map(|x| {
+            let item = x.get("item")?.as_str()?;
+            let quantity: u32 = x.get("quantity")?.as_integer()?.try_into().ok()?;
+            Some((item, quantity))
+        })
+        .collect();
+
+    if orders.is_empty() {
+        return Err((
+            StatusCode::NO_CONTENT,
+            "",
+        ));
+    };
+
+    let mut resp = String::from(format!("{}: {}", orders[0].0, orders[0].1));
+    for (i, q) in orders.iter().skip(1) {
+        resp.push_str(format!("\n{}: {}", i, q).as_str());
+    };
+    
+    Ok((
+        StatusCode::OK,
+        resp,
+    ))
+}
+
 #[shuttle_runtime::main]
 async fn main() -> shuttle_axum::ShuttleAxum {
-    let router = Router::new().route("/", get(hello_bird))
-                                    .route("/-1/seek", get(seek))
-                                    .route("/2/dest", get(dest))
-                                    .route("/2/key", get(key))
-                                    .route("/2/v6/dest", get(dest_v6))
-                                    .route("/2/v6/key", get(key_v6));
+    let router = Router::new()
+        .route("/", get(hello_bird))
+        .route("/-1/seek", get(seek))
+        .route("/2/dest", get(dest))
+        .route("/2/key", get(key))
+        .route("/2/v6/dest", get(dest_v6))
+        .route("/2/v6/key", get(key_v6))
+        .route("/5/manifest", post(manifest));
     
     Ok(router.into())
 }
