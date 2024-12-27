@@ -1,6 +1,7 @@
-use std::{net::{Ipv4Addr, Ipv6Addr}, str::FromStr};
+use std::{net::{Ipv4Addr, Ipv6Addr}, str::FromStr, time::Duration, sync::Arc};
 
 use axum::{extract::{rejection::JsonRejection, Json, Query}, http::{header, HeaderMap, Response, StatusCode}, response::IntoResponse, routing::{get, post}, Router};
+use lazy_static::lazy_static;
 
 async fn hello_bird() -> &'static str {
     "Hello, bird!"
@@ -145,7 +146,18 @@ async fn manifest(body: String) -> Result<(StatusCode, String), (StatusCode, &'s
     ))
 }
 
-#[derive(serde::Deserialize)]
+lazy_static! {
+    static ref cow: Arc<leaky_bucket::RateLimiter> = Arc::new(
+        leaky_bucket::RateLimiter::builder()
+            .initial(5)
+            .refill(1)
+            .max(5)
+            .interval(Duration::from_secs(1))
+            .build()
+    );
+}
+
+#[derive(serde::Deserialize, Debug)]
 struct Payload {
     liters: Option<f32>,
     gallons: Option<f32>,
@@ -157,7 +169,11 @@ struct Payload {
 const LITERS_PER_GALLON: f32 = 3.785411784;
 const LITRES_PER_PINT: f32 = 0.56826125;
 
-async fn milk(_headers: HeaderMap, json: Result<Json<Payload>, JsonRejection>) -> axum::response::Response {
+async fn milk(
+    axum::extract::State(milkee): axum::extract::State<Arc<leaky_bucket::RateLimiter>>,
+    json: Result<Json<Payload>, JsonRejection>,
+) -> axum::response::Response 
+{
     // Tasks 2 & 3
     if let Some(payload) = json.ok()
         .and_then(|j| Some(j.0)) {
@@ -203,9 +219,17 @@ async fn milk(_headers: HeaderMap, json: Result<Json<Payload>, JsonRejection>) -
     };
 
     // Task 1
-
-
-    ().into_response()
+    if milkee.try_acquire(1) {
+        (
+            StatusCode::OK,
+            "Milk withdrawn\n",
+        ).into_response()
+    } else {
+        (
+            StatusCode::TOO_MANY_REQUESTS,
+            "No milk available\n",
+        ).into_response()
+    }
 }
 
 #[shuttle_runtime::main]
@@ -218,7 +242,7 @@ async fn main() -> shuttle_axum::ShuttleAxum {
         .route("/2/v6/dest", get(dest_v6))
         .route("/2/v6/key", get(key_v6))
         .route("/5/manifest", post(manifest))
-        .route("/9/milk", post(milk));
+        .route("/9/milk", post(milk)).with_state(cow.clone());
     
     Ok(router.into())
 }
