@@ -1,6 +1,6 @@
 use std::{net::{Ipv4Addr, Ipv6Addr}, str::FromStr};
 
-use axum::{extract::Query, http::{header, StatusCode}, response::IntoResponse, routing::{get, post}, Router};
+use axum::{extract::{rejection::JsonRejection, Json, Query}, http::{header, HeaderMap, Response, StatusCode}, response::IntoResponse, routing::{get, post}, Router};
 
 async fn hello_bird() -> &'static str {
     "Hello, bird!"
@@ -145,6 +145,69 @@ async fn manifest(body: String) -> Result<(StatusCode, String), (StatusCode, &'s
     ))
 }
 
+#[derive(serde::Deserialize)]
+struct Payload {
+    liters: Option<f32>,
+    gallons: Option<f32>,
+
+    litres: Option<f32>,
+    pints: Option<f32>,
+}
+
+const LITERS_PER_GALLON: f32 = 3.785411784;
+const LITRES_PER_PINT: f32 = 0.56826125;
+
+async fn milk(_headers: HeaderMap, json: Result<Json<Payload>, JsonRejection>) -> axum::response::Response {
+    // Tasks 2 & 3
+    if let Some(payload) = json.ok()
+        .and_then(|j| Some(j.0)) {
+            if let Some(liters) = payload.liters {
+                if payload.gallons.is_none() && payload.litres.is_none() && payload.pints.is_none() {
+                    return (
+                        StatusCode::OK,
+                        Json(serde_json::json!({"gallons": liters / LITERS_PER_GALLON})),
+                    ).into_response();
+                };
+            };
+
+            if let Some(gallons) = payload.gallons {
+                if payload.liters.is_none() && payload.litres.is_none() && payload.pints.is_none() {
+                    return (
+                        StatusCode::OK,
+                        Json(serde_json::json!({"liters": gallons * LITERS_PER_GALLON})),
+                    ).into_response();
+                };
+            };
+
+            if let Some(litres) = payload.litres {
+                if payload.liters.is_none() && payload.gallons.is_none() && payload.pints.is_none() {
+                    return (
+                        StatusCode::OK,
+                        Json(serde_json::json!({"pints": litres / LITRES_PER_PINT})),
+                    ).into_response();
+                };
+            };
+
+            if let Some(pints) = payload.pints {
+                if payload.liters.is_none() && payload.gallons.is_none() && payload.litres.is_none() {
+                    return (
+                        StatusCode::OK,
+                        Json(serde_json::json!({"litres": pints * LITRES_PER_PINT})),
+                    ).into_response();
+                };
+            };
+
+            return (
+                StatusCode::BAD_REQUEST,
+            ).into_response();
+    };
+
+    // Task 1
+
+
+    ().into_response()
+}
+
 #[shuttle_runtime::main]
 async fn main() -> shuttle_axum::ShuttleAxum {
     let router = Router::new()
@@ -154,7 +217,8 @@ async fn main() -> shuttle_axum::ShuttleAxum {
         .route("/2/key", get(key))
         .route("/2/v6/dest", get(dest_v6))
         .route("/2/v6/key", get(key_v6))
-        .route("/5/manifest", post(manifest));
+        .route("/5/manifest", post(manifest))
+        .route("/9/milk", post(milk));
     
     Ok(router.into())
 }
