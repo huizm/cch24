@@ -1,6 +1,6 @@
 use std::{net::{Ipv4Addr, Ipv6Addr}, str::FromStr, time::Duration, sync::Arc};
 
-use axum::{extract::{rejection::JsonRejection, Json, Query}, http::{header, HeaderMap, Response, StatusCode}, response::IntoResponse, routing::{get, post}, Router};
+use axum::{extract::{rejection::JsonRejection, Json, Query}, http::{header, StatusCode}, response::IntoResponse, routing::{get, post}, Router};
 use lazy_static::lazy_static;
 
 async fn hello_bird() -> &'static str {
@@ -174,9 +174,10 @@ async fn milk(
     json: Result<Json<Payload>, JsonRejection>,
 ) -> axum::response::Response 
 {
-    // Tasks 2 & 3
-    if let Some(payload) = json.ok()
-        .and_then(|j| Some(j.0)) {
+    let milked = milkee.try_acquire(1);
+
+    match json {
+        Ok(Json(payload)) => {
             if let Some(liters) = payload.liters {
                 if payload.gallons.is_none() && payload.litres.is_none() && payload.pints.is_none() {
                     return (
@@ -213,22 +214,32 @@ async fn milk(
                 };
             };
 
-            return (
+            (
                 StatusCode::BAD_REQUEST,
-            ).into_response();
-    };
-
-    // Task 1
-    if milkee.try_acquire(1) {
-        (
-            StatusCode::OK,
-            "Milk withdrawn\n",
-        ).into_response()
-    } else {
-        (
-            StatusCode::TOO_MANY_REQUESTS,
-            "No milk available\n",
-        ).into_response()
+            ).into_response()
+        },
+        Err(e) => {
+            match e {
+                JsonRejection::MissingJsonContentType(_) => {
+                    if milked {
+                        (
+                            StatusCode::OK,
+                            "Milk withdrawn\n",
+                        ).into_response()
+                    } else {
+                        (
+                            StatusCode::TOO_MANY_REQUESTS,
+                            "No milk available\n",
+                        ).into_response()
+                    }
+                },
+                _ => {
+                    (
+                        StatusCode::BAD_REQUEST
+                    ).into_response()
+                },
+            }
+        },
     }
 }
 
