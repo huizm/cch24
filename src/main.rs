@@ -1,6 +1,6 @@
-use std::{net::{Ipv4Addr, Ipv6Addr}, str::FromStr, time::Duration, sync::Arc};
+use std::{fmt::format, net::{Ipv4Addr, Ipv6Addr}, str::FromStr, sync::{Arc, Mutex}, time::Duration};
 
-use axum::{extract::{rejection::JsonRejection, Json, Query}, http::{header, StatusCode}, response::IntoResponse, routing::{get, post}, Router};
+use axum::{extract::{rejection::JsonRejection, Json, Path, Query, State}, http::{header, StatusCode}, response::{IntoResponse, Response}, routing::{get, post}, Router};
 use lazy_static::lazy_static;
 
 async fn hello_bird() -> &'static str {
@@ -85,8 +85,6 @@ async fn key_v6(req: Query<KeyV6Req>) -> impl IntoResponse {
 }
 
 async fn manifest(body: String) -> Result<(StatusCode, String), (StatusCode, &'static str)> {
-    // let mut orders: Vec<order::Order> = Vec::new();
-
     // parse cargo manifest, return error if failed
     let manifest = cargo_manifest::Manifest::from_str(body.as_str()).map_err(|_| (
             StatusCode::BAD_REQUEST,
@@ -157,7 +155,7 @@ lazy_static! {
     );
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize)]
 struct Payload {
     liters: Option<f32>,
     gallons: Option<f32>,
@@ -170,9 +168,9 @@ const LITERS_PER_GALLON: f32 = 3.785411784;
 const LITRES_PER_PINT: f32 = 0.56826125;
 
 async fn milk(
-    axum::extract::State(milkee): axum::extract::State<Arc<leaky_bucket::RateLimiter>>,
+    State(milkee): State<Arc<leaky_bucket::RateLimiter>>,
     json: Result<Json<Payload>, JsonRejection>,
-) -> axum::response::Response 
+) -> Response
 {
     let milked = milkee.try_acquire(1);
 
@@ -243,6 +241,81 @@ async fn milk(
     }
 }
 
+#[derive(Clone, Copy)]
+enum Tile {
+    Empty,
+    Cookie,
+    Milk,
+}
+
+impl std::fmt::Display for Tile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+                Tile::Empty => '⬛',
+                Tile::Cookie => '🍪',
+                Tile::Milk => '🥛',
+        })
+    }
+}
+
+struct Board {
+    b: [[Tile; 4]; 4],
+    winner: Option<Tile>,
+}
+
+impl std::fmt::Display for Board {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let b = &self.b;
+        write!(f, "⬜{}{}{}{}⬜\n⬜{}{}{}{}⬜\n⬜{}{}{}{}⬜\n⬜{}{}{}{}⬜\n⬜⬜⬜⬜⬜⬜\n{}",
+            b[0][0], b[0][1], b[0][2], b[0][3],
+            b[1][0], b[1][1], b[1][2], b[1][3],
+            b[2][0], b[2][1], b[2][2], b[2][3],
+            b[3][0], b[3][1], b[3][2], b[3][3],
+            match self.winner() {
+                Some(s) => s,
+                None => String::new(),
+            },
+        )
+    }
+}
+
+impl Board {
+    fn new() -> Self {
+        Self {
+            b: [[Tile::Empty; 4]; 4],
+            winner: None,
+        }
+    }
+
+    fn reset(&mut self) {
+        self.b = [[Tile::Empty; 4]; 4];
+        self.winner = None;
+    }
+
+    fn winner(&self) -> Option<String> {
+        self.winner
+            .and_then(|w| match w {
+                    Tile::Empty => Some("No winner.\n".to_owned()),
+                    other => Some(format!("{} wins!\n", other)),
+        })
+    }
+}
+
+lazy_static! {
+    static ref singleton_board: Arc<Mutex<Board>> = Arc::new(Mutex::new(Board::new()));
+}
+
+async fn board(State(b): State<Arc<Mutex<Board>>>) -> impl IntoResponse {
+    let b = b.lock().unwrap();
+    b.to_string()
+}
+
+async fn reset(State(b): State<Arc<Mutex<Board>>>) -> impl IntoResponse {
+    let mut b = b.lock().unwrap();
+    b.reset();
+    b.to_string()
+}
+
 #[shuttle_runtime::main]
 async fn main() -> shuttle_axum::ShuttleAxum {
     let router = Router::new()
@@ -253,7 +326,9 @@ async fn main() -> shuttle_axum::ShuttleAxum {
         .route("/2/v6/dest", get(dest_v6))
         .route("/2/v6/key", get(key_v6))
         .route("/5/manifest", post(manifest))
-        .route("/9/milk", post(milk)).with_state(cow.clone());
+        .route("/9/milk", post(milk)).with_state(cow.clone())
+        .route("/12/board", get(board).with_state(singleton_board.clone()))
+        .route("/12/reset", post(reset).with_state(singleton_board.clone()))
     
     Ok(router.into())
 }
