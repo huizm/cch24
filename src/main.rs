@@ -281,12 +281,11 @@ impl std::ops::Index<(usize, usize)> for Board {
 
 impl std::fmt::Display for Board {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let b = &self.b;
         write!(f, "⬜{}{}{}{}⬜\n⬜{}{}{}{}⬜\n⬜{}{}{}{}⬜\n⬜{}{}{}{}⬜\n⬜⬜⬜⬜⬜⬜\n{}",
-            b[0][0], b[0][1], b[0][2], b[0][3],
-            b[1][0], b[1][1], b[1][2], b[1][3],
-            b[2][0], b[2][1], b[2][2], b[2][3],
-            b[3][0], b[3][1], b[3][2], b[3][3],
+            self[(0, 0)], self[(0, 1)], self[(0, 2)], self[(0, 3)],
+            self[(1, 0)], self[(1, 1)], self[(1, 2)], self[(1, 3)],
+            self[(2, 0)], self[(2, 1)], self[(2, 2)], self[(2, 3)],
+            self[(3, 0)], self[(3, 1)], self[(3, 2)], self[(3, 3)],
             match self.winner() {
                 Some(s) => s,
                 None => String::new(),
@@ -344,7 +343,7 @@ async fn main() -> shuttle_axum::ShuttleAxum {
         .route("/5/manifest", post(manifest))
         .route("/9/milk", post(milk)).with_state(cow.clone())
         .route("/12/board", get(board).with_state(singleton_board.clone()))
-        .route("/12/reset", post(reset).with_state(singleton_board.clone()))
+        .route("/12/reset", post(reset).with_state(singleton_board.clone()));
     
     Ok(router.into())
 }
