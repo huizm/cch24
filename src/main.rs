@@ -259,8 +259,21 @@ impl std::fmt::Display for Tile {
 }
 
 struct Board {
-    b: [[Tile; 4]; 4],
+    b: [Vec<Tile>; 4],
     winner: Option<Tile>,
+}
+
+impl std::ops::Index<(usize, usize)> for Board {
+    type Output = Tile;
+
+    fn index(&self, index: (usize, usize)) -> &Self::Output {
+        let row = &self.b[index.0];
+        if row.len() <= index.1 {
+            &Tile::Empty
+        } else {
+            &row[index.1]
+        }
+    }
 }
 
 impl std::fmt::Display for Board {
@@ -282,13 +295,13 @@ impl std::fmt::Display for Board {
 impl Board {
     fn new() -> Self {
         Self {
-            b: [[Tile::Empty; 4]; 4],
+            b: Default::default(),
             winner: None,
         }
     }
 
     fn reset(&mut self) {
-        self.b = [[Tile::Empty; 4]; 4];
+        self.b = Default::default();
         self.winner = None;
     }
 
