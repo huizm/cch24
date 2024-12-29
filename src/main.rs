@@ -259,19 +259,22 @@ impl std::fmt::Display for Tile {
 }
 
 struct Board {
-    b: [Vec<Tile>; 4],
+    b: [Vec<Tile>; 4], // each vec a *column* not *row*
     winner: Option<Tile>,
 }
 
 impl std::ops::Index<(usize, usize)> for Board {
     type Output = Tile;
 
+    /// # Contract
+    /// 
+    /// - `index.0`, `index.1` within `0..=3`
     fn index(&self, index: (usize, usize)) -> &Self::Output {
-        let row = &self.b[index.0];
-        if row.len() <= index.1 {
+        let col = &self.b[index.1];
+        if col.len() <= 3 - index.0 {
             &Tile::Empty
         } else {
-            &row[index.1]
+            &col[3 - index.0]
         }
     }
 }
