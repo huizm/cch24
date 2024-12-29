@@ -1,4 +1,4 @@
-use std::{fmt::format, net::{Ipv4Addr, Ipv6Addr}, str::FromStr, sync::{Arc, Mutex}, time::Duration};
+use std::{net::{Ipv4Addr, Ipv6Addr}, str::FromStr, sync::{Arc, Mutex}, time::Duration};
 
 use axum::{extract::{rejection::JsonRejection, Json, Path, Query, State}, http::{header, StatusCode}, response::{IntoResponse, Response}, routing::{get, post}, Router};
 use lazy_static::lazy_static;
@@ -241,7 +241,7 @@ async fn milk(
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum Tile {
     Empty,
     Cookie,
@@ -286,7 +286,7 @@ impl std::fmt::Display for Board {
             self[(1, 0)], self[(1, 1)], self[(1, 2)], self[(1, 3)],
             self[(2, 0)], self[(2, 1)], self[(2, 2)], self[(2, 3)],
             self[(3, 0)], self[(3, 1)], self[(3, 2)], self[(3, 3)],
-            match self.winner() {
+            match self.winning_message() {
                 Some(s) => s,
                 None => String::new(),
             },
@@ -307,12 +307,44 @@ impl Board {
         self.winner = None;
     }
 
-    fn winner(&self) -> Option<String> {
+    fn winning_message(&self) -> Option<String> {
         self.winner
             .and_then(|w| match w {
                     Tile::Empty => Some("No winner.\n".to_owned()),
                     other => Some(format!("{} wins!\n", other)),
         })
+    }
+
+    fn insert(&mut self, column: usize, team: Tile) -> bool {
+        if self.winner.is_some() {
+            // game already finished
+            return false;
+        };
+
+        // insert tile
+        let col = &mut self.b[column];
+        let row = col.len();
+        if row == 4 {
+            return false;
+        };
+        col.push(team);
+        
+        // check winner eagerly
+        if self.b.iter().all(|v| v.len() == 4) {
+            // game finishes, no winner
+            self.winner = Some(Tile::Empty);
+        };
+
+        if (0..=3).map(|i| self[(row, i)]).all(|t| t == team) || // column
+            (0..=3).map(|i| self[(i, column)]).all(|t| t == team) || // row
+            (0..=3).map(|i| self[(i, i)]).all(|t| t == team) ||
+            (0..=3).map(|i| self[(i, 3 - i)]).all(|t| t == team) // diagonal
+        {
+            // game finishes, team wins
+            self.winner = Some(team);
+        };
+
+        true
     }
 }
 
@@ -331,6 +363,44 @@ async fn reset(State(b): State<Arc<Mutex<Board>>>) -> impl IntoResponse {
     b.to_string()
 }
 
+async fn place(
+    Path((team, col)): Path<(String, usize)>,
+    State(b): State<Arc<Mutex<Board>>>,
+) -> Response
+{
+    // validate data
+    if !(1..=4).contains(&col) {
+        return (
+            StatusCode::BAD_REQUEST,
+        ).into_response();
+    };
+    
+    let team = if team == "cookie"
+    {
+        Tile::Cookie
+    } else if team == "milk" {
+        Tile::Milk
+    } else {
+        return (
+            StatusCode::BAD_REQUEST,
+        ).into_response();
+    };
+
+    // insert tile
+    let mut b = b.lock().unwrap();
+    if !b.insert(col - 1, team) {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            b.to_string(),
+        ).into_response()
+    } else {
+        (
+            StatusCode::OK,
+            b.to_string(),
+        ).into_response()
+    }
+}
+
 #[shuttle_runtime::main]
 async fn main() -> shuttle_axum::ShuttleAxum {
     let router = Router::new()
@@ -343,7 +413,8 @@ async fn main() -> shuttle_axum::ShuttleAxum {
         .route("/5/manifest", post(manifest))
         .route("/9/milk", post(milk)).with_state(cow.clone())
         .route("/12/board", get(board).with_state(singleton_board.clone()))
-        .route("/12/reset", post(reset).with_state(singleton_board.clone()));
+        .route("/12/reset", post(reset).with_state(singleton_board.clone()))
+        .route("/12/place/:team/:column", post(place).with_state(singleton_board.clone()));
     
     Ok(router.into())
 }
