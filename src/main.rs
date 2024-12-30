@@ -1,6 +1,15 @@
-use axum::{http::{header, StatusCode}, response::IntoResponse, routing::{get, post}, Router};
+use std::sync::Arc;
+
+use axum::{
+    http::{header, StatusCode},
+    response::IntoResponse,
+    routing::{get, post, delete, put},
+    Router
+};
+use sqlx::PgPool;
 
 mod handlers;
+mod models;
 
 async fn hello_bird() -> &'static str {
     "Hello, bird!"
@@ -14,7 +23,14 @@ async fn seek() -> impl IntoResponse {
 }
 
 #[shuttle_runtime::main]
-async fn main() -> shuttle_axum::ShuttleAxum {
+async fn main(#[shuttle_shared_db::Postgres] pool: PgPool) -> shuttle_axum::ShuttleAxum {
+    sqlx::migrate!()
+        .run(&pool)
+        .await
+        .expect("Failed to migrate database");
+
+    let pool = Arc::new(pool);
+    
     let router = Router::new()
         .route("/", get(hello_bird))
         .route("/-1/seek", get(seek))
@@ -28,7 +44,12 @@ async fn main() -> shuttle_axum::ShuttleAxum {
         .route("/12/reset", post(handlers::reset).with_state(handlers::singleton_board.clone()))
         .route("/12/place/:team/:column", post(handlers::place).with_state(handlers::singleton_board.clone()))
         .route("/16/wrap", post(handlers::wrap))
-        .route("/16/unwrap", get(handlers::unwrap));
-    
+        .route("/16/unwrap", get(handlers::unwrap))
+        .route("/19/reset", post(handlers::clear_quotes)).with_state(pool.clone())
+        .route("/19/cite/:id", get(handlers::cite)).with_state(pool.clone())
+        .route("/19/remove/:id", delete(handlers::remove)).with_state(pool.clone())
+        .route("/19/undo/:id", put(handlers::undo)).with_state(pool.clone())
+        .route("/19/draft", post(handlers::draft)).with_state(pool.clone());
+
     Ok(router.into())
 }
