@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use axum::{extract::{State, Path}, response::{Response, IntoResponse}, http::StatusCode};
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Tile {
     Empty,
     Cookie,
@@ -19,6 +19,7 @@ impl std::fmt::Display for Tile {
     }
 }
 
+#[derive(Debug)]
 pub struct Board {
     b: [Vec<Tile>; 4], // each vec a *column* not *row*
     winner: Option<Tile>,

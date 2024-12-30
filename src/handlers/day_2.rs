@@ -1,7 +1,7 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 use axum::{extract::Query, response::IntoResponse};
 
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 pub struct DestReq {
     from: Ipv4Addr,
     key: Ipv4Addr,
@@ -21,7 +21,7 @@ pub async fn dest(req: Query<DestReq>) -> impl IntoResponse {
     to.to_string()
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 pub struct KeyReq {
     from: Ipv4Addr,
     to: Ipv4Addr,
@@ -41,7 +41,7 @@ pub async fn key(req: Query<KeyReq>) -> impl IntoResponse {
     key.to_string()
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 pub struct DestV6Req {
     from: Ipv6Addr,
     key: Ipv6Addr,
@@ -56,7 +56,7 @@ pub async fn dest_v6(req: Query<DestV6Req>) -> impl IntoResponse {
     to.to_string()
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 pub struct KeyV6Req {
     from: Ipv6Addr,
     to: Ipv6Addr,

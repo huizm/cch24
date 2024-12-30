@@ -13,7 +13,7 @@ lazy_static! {
     );
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 pub struct Payload {
     liters: Option<f32>,
     gallons: Option<f32>,
