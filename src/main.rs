@@ -26,7 +26,9 @@ async fn main() -> shuttle_axum::ShuttleAxum {
         .route("/9/milk", post(handlers::milk)).with_state(handlers::cow.clone())
         .route("/12/board", get(handlers::board).with_state(handlers::singleton_board.clone()))
         .route("/12/reset", post(handlers::reset).with_state(handlers::singleton_board.clone()))
-        .route("/12/place/:team/:column", post(handlers::place).with_state(handlers::singleton_board.clone()));
+        .route("/12/place/:team/:column", post(handlers::place).with_state(handlers::singleton_board.clone()))
+        .route("/16/wrap", post(handlers::wrap))
+        .route("/16/unwrap", get(handlers::unwrap));
     
     Ok(router.into())
 }
