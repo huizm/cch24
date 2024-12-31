@@ -7,6 +7,7 @@ use axum::{
     Router
 };
 use sqlx::PgPool;
+use tower_http::services::ServeDir;
 
 mod handlers;
 mod models;
@@ -49,7 +50,8 @@ async fn main(#[shuttle_shared_db::Postgres] pool: PgPool) -> shuttle_axum::Shut
         .route("/19/cite/:id", get(handlers::cite)).with_state(pool.clone())
         .route("/19/remove/:id", delete(handlers::remove)).with_state(pool.clone())
         .route("/19/undo/:id", put(handlers::undo)).with_state(pool.clone())
-        .route("/19/draft", post(handlers::draft)).with_state(pool.clone());
+        .route("/19/draft", post(handlers::draft)).with_state(pool.clone())
+        .nest_service("/assets", ServeDir::new("assets"));
 
     Ok(router.into())
 }
