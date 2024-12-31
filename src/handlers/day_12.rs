@@ -1,4 +1,5 @@
 use lazy_static::lazy_static;
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::sync::{Arc, Mutex};
 use axum::{extract::{State, Path}, response::{Response, IntoResponse}, http::StatusCode};
 
@@ -64,6 +65,56 @@ impl Board {
         }
     }
 
+    fn new_random(rng: &mut StdRng) -> Self {
+        let mut b = Self::new();
+        
+        // generate tiles
+        let mut generated_tiles: Vec<Tile> = Vec::new();
+        for _ in 0..16 {
+            generated_tiles.push(if rng.gen::<bool>() { Tile::Cookie } else { Tile::Milk });
+        };
+
+        // insert tiles reversely
+        for i in (0..16).rev() {
+            b.b[i % 4].push(generated_tiles[i]);
+        };
+
+        // check for winner lazily
+        b.check_winner();
+
+        b
+    }
+
+    /// Check for winner lazily
+    fn check_winner(&mut self) {
+        // diagonal
+        if (0..=3).map(|i| self[(i, i)]).filter(|t| *t != Tile::Empty).all(|t| t == self[(0, 0)]) {
+            self.winner = Some(self[(0, 0)]);
+            return;
+        } else if (0..=3).map(|i| self[(i, 3 - i)]).filter(|t| *t != Tile::Empty).all(|t| t == self[(0, 3)]) {
+            self.winner = Some(self[(0, 3)]);
+            return;
+        };
+
+        // row and column
+        for i in 0..=3 {
+            if (0..=3).map(|j| self[(i, j)]).filter(|t| *t != Tile::Empty).all(|t| t == self[(i, 0)]) {
+                self.winner = Some(self[(i, 0)]);
+                return;
+            } else if (0..=3).map(|j| self[(i, j)]).filter(|t| *t != Tile::Empty).all(|t| t == self[(0, i)]) {
+                self.winner = Some(self[(0, i)]);
+                return;
+            }
+        }
+
+        // game finished
+        if self.b.iter().all(|v| v.len() == 4) {
+            self.winner = Some(Tile::Empty);
+        } else {
+            self.winner = None;
+        };
+    }
+
     fn reset(&mut self) {
         self.b = Default::default();
         self.winner = None;
@@ -119,9 +170,13 @@ pub async fn board(State(b): State<Arc<Mutex<Board>>>) -> impl IntoResponse {
     b.to_string()
 }
 
-pub async fn reset(State(b): State<Arc<Mutex<Board>>>) -> impl IntoResponse {
+pub async fn reset(State((b, rng)): State<(Arc<Mutex<Board>>, Arc<Mutex<StdRng>>)>) -> impl IntoResponse {
     let mut b = b.lock().unwrap();
     b.reset();
+
+    let mut rng = rng.lock().unwrap();
+    *rng = rand::rngs::StdRng::seed_from_u64(2024);
+
     b.to_string()
 }
 
@@ -161,4 +216,9 @@ pub async fn place(
             b.to_string(),
         ).into_response()
     }
+}
+
+pub async fn random_board(State(rng): State<Arc<Mutex<StdRng>>>) -> String {
+    let mut rng = rng.lock().unwrap();
+    Board::new_random(&mut *rng).to_string()
 }

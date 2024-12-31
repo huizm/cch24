@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use axum::{
     http::{header, StatusCode},
@@ -6,6 +6,7 @@ use axum::{
     routing::{get, post, delete, put},
     Router
 };
+use rand::SeedableRng;
 use sqlx::PgPool;
 use tower_http::services::ServeDir;
 
@@ -31,7 +32,8 @@ async fn main(#[shuttle_shared_db::Postgres] pool: PgPool) -> shuttle_axum::Shut
         .expect("Failed to migrate database");
 
     let pool = Arc::new(pool);
-    
+    let rng = Arc::new(Mutex::new(rand::rngs::StdRng::seed_from_u64(2024)));
+
     let router = Router::new()
         .route("/", get(hello_bird))
         .route("/-1/seek", get(seek))
@@ -42,8 +44,9 @@ async fn main(#[shuttle_shared_db::Postgres] pool: PgPool) -> shuttle_axum::Shut
         .route("/5/manifest", post(handlers::manifest))
         .route("/9/milk", post(handlers::milk)).with_state(handlers::cow.clone())
         .route("/12/board", get(handlers::board).with_state(handlers::singleton_board.clone()))
-        .route("/12/reset", post(handlers::reset).with_state(handlers::singleton_board.clone()))
+        .route("/12/reset", post(handlers::reset).with_state((handlers::singleton_board.clone(), rng.clone())))
         .route("/12/place/:team/:column", post(handlers::place).with_state(handlers::singleton_board.clone()))
+        .route("/12/random-board", get(handlers::random_board).with_state(rng.clone()))
         .route("/16/wrap", post(handlers::wrap))
         .route("/16/unwrap", get(handlers::unwrap))
         .route("/19/reset", post(handlers::clear_quotes)).with_state(pool.clone())
