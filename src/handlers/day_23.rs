@@ -30,7 +30,7 @@ pub async fn ornament(
 {
     let state = html_escape::encode_safe(&state);
     let n = html_escape::encode_safe(&n);
-    
+
     let (curr_state, next_state) = match state.as_ref() {
         "on" => (" on", "off"),
         "off" => ("", "on"),
@@ -41,10 +41,11 @@ pub async fn ornament(
         <html>
             <div class="ornament{}"
                 id="ornament{}"
-                hx-trigger="load changed delay:2s"
+                hx-trigger="load delay:2s once"
                 hx-get="/23/ornament/{}/{}"
                 hx-swap="outerHTML">
             </div>
         </html>
-    "#, curr_state, n, next_state, n)))
+        "#, curr_state, n, next_state, n)
+    ))
 }
