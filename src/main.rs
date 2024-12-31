@@ -43,6 +43,7 @@ async fn main(#[shuttle_shared_db::Postgres] pool: PgPool) -> shuttle_axum::Shut
         .route("/2/v6/key", get(handlers::key_v6))
         .route("/5/manifest", post(handlers::manifest))
         .route("/9/milk", post(handlers::milk)).with_state(handlers::cow.clone())
+        .route("/9/refill", post(handlers::refill).with_state(handlers::cow.clone()))
         .route("/12/board", get(handlers::board).with_state(handlers::singleton_board.clone()))
         .route("/12/reset", post(handlers::reset).with_state((handlers::singleton_board.clone(), rng.clone())))
         .route("/12/place/:team/:column", post(handlers::place).with_state(handlers::singleton_board.clone()))

@@ -1,16 +1,16 @@
 use lazy_static::lazy_static;
-use std::{sync::Arc, time::Duration};
+use std::{sync::{Arc, Mutex}, time::Duration};
 use axum::{extract::{State, Json, rejection::JsonRejection}, response::{Response, IntoResponse}, http::StatusCode};
 
 lazy_static! {
-    pub static ref cow: Arc<leaky_bucket::RateLimiter> = Arc::new(
+    pub static ref cow: Arc<Mutex<leaky_bucket::RateLimiter>> = Arc::new(Mutex::new(
         leaky_bucket::RateLimiter::builder()
             .initial(5)
             .refill(1)
             .max(5)
             .interval(Duration::from_secs(1))
             .build()
-    );
+    ));
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -26,10 +26,11 @@ const LITERS_PER_GALLON: f32 = 3.785411784;
 const LITRES_PER_PINT: f32 = 0.56826125;
 
 pub async fn milk(
-    State(milkee): State<Arc<leaky_bucket::RateLimiter>>,
+    State(milkee): State<Arc<Mutex<leaky_bucket::RateLimiter>>>,
     json: Result<Json<Payload>, JsonRejection>,
 ) -> Response
-{
+{   
+    let milkee = milkee.lock().unwrap();
     let milked = milkee.try_acquire(1);
 
     match json {
@@ -97,4 +98,17 @@ pub async fn milk(
             }
         },
     }
+}
+
+pub async fn refill(State(milkee): State<Arc<Mutex<leaky_bucket::RateLimiter>>>) -> StatusCode {
+    let mut milkee = milkee.lock().unwrap();
+
+    *milkee = leaky_bucket::RateLimiter::builder()
+        .initial(5)
+        .refill(1)
+        .max(5)
+        .interval(Duration::from_secs(1))
+        .build();
+
+    StatusCode::OK
 }
