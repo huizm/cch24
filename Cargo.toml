@@ -20,3 +20,4 @@ sqlx = { version = "0.8.2", features = ["chrono", "uuid"] }
 uuid = "1.11.0"
 chrono = "0.4.39"
 tower-http = { version = "0.6.2", features = ["fs"] }
+html-escape = "0.2.13"

@@ -5,6 +5,8 @@ pub async fn star() -> Html<&'static str> {
 }
 
 pub async fn color(Path(color): Path<String>) -> Result<Html<String>, StatusCode> {
+    let color = html_escape::encode_safe(&color);
+
     Ok(Html(format!(r#"
         <html>
             <div class="present {}" hx-get="/23/present/{}" hx-swap="outerHTML">
@@ -14,7 +16,7 @@ pub async fn color(Path(color): Path<String>) -> Result<Html<String>, StatusCode
                 <div class="ribbon"></div>
             </div>
         </html>
-    "#, color, match color.as_str() {
+    "#, color, match color.as_ref() {
         "red" => "blue",
         "blue" => "purple",
         "purple" => "red",
@@ -26,7 +28,10 @@ pub async fn ornament(
     Path((state, n)): Path<(String, String)>,
 ) -> Result<Html<String>, StatusCode>
 {
-    let (curr_state, next_state) = match state.as_str() {
+    let state = html_escape::encode_safe(&state);
+    let n = html_escape::encode_safe(&n);
+    
+    let (curr_state, next_state) = match state.as_ref() {
         "on" => (" on", "off"),
         "off" => ("", "on"),
         _ => { return Err(StatusCode::IM_A_TEAPOT); },
