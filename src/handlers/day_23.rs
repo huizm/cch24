@@ -21,3 +21,25 @@ pub async fn color(Path(color): Path<String>) -> Result<Html<String>, StatusCode
         _ => { return Err(StatusCode::IM_A_TEAPOT); },
     })))
 }
+
+pub async fn ornament(
+    Path((state, n)): Path<(String, String)>,
+) -> Result<Html<String>, StatusCode>
+{
+    let (curr_state, next_state) = match state.as_str() {
+        "on" => (" on", "off"),
+        "off" => ("", "on"),
+        _ => { return Err(StatusCode::IM_A_TEAPOT); },
+    };
+
+    Ok(Html(format!(r#"
+        <html>
+            <div class="ornament{}"
+                id="ornament{}"
+                hx-trigger="load changed delay:2s"
+                hx-get="/23/ornament/{}/{}"
+                hx-swap="outerHTML">
+            </div>
+        </html>
+    "#, curr_state, n, next_state, n)))
+}
