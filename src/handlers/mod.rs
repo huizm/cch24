@@ -12,4 +12,4 @@ pub use day_9::{milk, refill, cow};
 pub use day_12::{board, reset, place, random_board, singleton_board};
 pub use day_16::{wrap, unwrap, decode};
 pub use day_19::{clear_quotes, cite, remove, undo, draft};
-pub use day_23::{star, color, ornament};
+pub use day_23::{star, color, ornament, lockfile};
